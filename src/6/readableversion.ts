@@ -18,14 +18,12 @@ function totalTransfers(map: { [name: string]: string }): number {
     }, 0);
 }
 
-//calculate orbital sequences of YOU and SAN at the same time time, step by step.
-//stop once the sequences have an orbit X in common.
-//return the total steps of the path YOU->X->SAN.
+//calculate orbital sequences of YOU and SAN at the same time, step by step.
+//stop once the sequences have an orbit X in common. return the total steps of the path YOU->X->SAN.
 function yourTransfers(map: { [name: string]: string}): number {
-    let start = map["YOU"], end = map["SAN"];
+    let start = map["YOU"], end = map["SAN"], common: string;
     let youmap: { [name: string]: number } = {}; youmap[start] = 0;
     let endmap: { [name: string]: number } = {}; endmap[end] = 0;
-    let common: string;
 
     while (map[start] || map[end]) { 
         if (map[start]) {
