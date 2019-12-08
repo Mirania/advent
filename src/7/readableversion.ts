@@ -28,7 +28,7 @@ fs.readFile("src/7/input.txt", { encoding: 'utf8' }, (err, text) => {
     console.log("Part 2:", highest);
 });
 
-interface Amplifier { signal: number, amp: (phase: number) => Amplifier, restore: (signal: number) => Amplifier, memory: number[], pointer: number };
+interface Amplifier { signal: number, amp: (phase: number) => Amplifier, restore: (signal: number) => Amplifier };
 
 function amp(phase: number, signal = 0, intcode = originalcode.slice(0), i = 0, phaseread = false): Amplifier {
     while (i < intcode.length) {
@@ -39,9 +39,7 @@ function amp(phase: number, signal = 0, intcode = originalcode.slice(0), i = 0, 
             case 4: return {
                 signal: resolve(i, 1), 
                 amp: (phase: number): Amplifier => amp(phase, resolve(i, 1)),
-                restore: (signal: number): Amplifier => amp(phase, signal, intcode, i+2, true),
-                memory: intcode,
-                pointer: i+2
+                restore: (signal: number): Amplifier => amp(phase, signal, intcode, i+2, true)
             };
             case 5: i = resolve(i, 1) !== 0 ? resolve(i, 2) : i + 3; break;
             case 6: i = resolve(i, 1) === 0 ? resolve(i, 2) : i + 3; break;
