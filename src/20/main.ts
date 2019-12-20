@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 
 type Point = { x: number, y: number };
-type Maze = { portals: { [xyentry: string]: {dest: Point, noreturn: Point} }, start: Point, end: Point };
+type Maze = { portals: { [xyentry: string]: Portal }, start: Point, end: Point };
+type Portal = { name: string, dest: Point, loc: Point, levelmod: number };
 
 let grid: string[][];
 let maze: Maze;
@@ -10,79 +11,83 @@ fs.readFile("src/20/input.txt", { encoding: 'utf8' }, (err, text) => {
     if (err) { console.log(err); return; }
 
     grid = text.split("\n").map(line => line.split(""));
-    console.log(pathfinder(port()))
 
-    //do i need noreturn on portals for anything?
-    //add levelmod (-1/+1) depending on outer or iner
+    maze = thinkWithPortals();
+    console.log("Part 1:", pathfinder(maze, true));
+    console.log("Part 2:", pathfinder(maze, false));
+
 });
 
-let getChar = (x: number, y: number) => y<0 || x<0 || y>grid.length-1 || x>grid[0].length-1 ? "#" : grid[y][x];
+let getChar = (point: Point) => point.y<0 || point.x<0 || point.y>grid.length-1 || point.x>grid[0].length-1 ? "#" : grid[point.y][point.x];
 let isPortal = (char: string) => { let n = char.charCodeAt(0); return n>=65 && n<=90; }
-let nearbyPortal = (x: number, y: number) => isPortal(getChar(x,y+1)) ? {x: x, y: y+1} : isPortal(getChar(x+1,y)) ? {x: x+1, y: y} : null;
-let isDot = (char: string) => char===".";
-let setify = (point: Point) => `${point.x},${point.y}`;
+let isWall = (char: string) => char === "#";
+let isDot = (char: string) => char === ".";
+let keyify = (point: Point, level?: number) => `${point.x},${point.y},${level===undefined ? "" : level}`;
 
-function pathfinder(maze: Maze): number {
-    let nodes = [{steps: 0, point: maze.start}];
-    let searched = new Set<string>().add(setify(maze.start));
+function nearbyPortal(point: Point): Point {
+    let v = {x: point.x, y: point.y+1};
+    let h = {x: point.x+1, y: point.y};
+    return isPortal(getChar(v)) ? v : isPortal(getChar(h)) ? h : null;
+}
+
+function pathfinder(maze: Maze, ignoreLevels: boolean): number {
+    let nodes = [{ steps: 0, point: maze.start, level: 0 }];
+    let ids: { [x: string]: number } = {};
 
     while (true) {
-        if (nodes.length===0) return Infinity;
+        if (nodes.length === 0) return Infinity;
         let n = nodes.shift();
 
-        let char = getChar(n.point.x, n.point.y);
+        let char = getChar(n.point);
         if (!isDot(char) && !isPortal(char)) continue;
-        if (n.point.x===maze.end.x && n.point.y===maze.end.y) return n.steps;   
+        if ((n.level===0 || ignoreLevels) && n.point.x === maze.end.x && n.point.y === maze.end.y) return n.steps;
 
-        let u = {x: n.point.x, y: n.point.y-1}, d = {x: n.point.x, y: n.point.y+1}, 
-            l = {x: n.point.x-1, y: n.point.y}, r = {x: n.point.x+1, y: n.point.y};
-        let ukey = setify(u), dkey = setify(d), lkey = setify(l), rkey = setify(r);
+        let newsteps = n.steps+1;
+        let dirs: Point[] = [{ x: n.point.x, y: n.point.y - 1 }, { x: n.point.x, y: n.point.y + 1 },
+                             { x: n.point.x - 1, y: n.point.y }, { x: n.point.x + 1, y: n.point.y }];
 
-        if (!searched.has(ukey)) {
-            if (maze.portals[ukey]) {
-                nodes.push({steps: n.steps+1, point: maze.portals[ukey].dest});
-                searched.add(ukey); searched.add(setify(maze.portals[ukey].dest));
-            } else { nodes.push({steps: n.steps+1, point: u}); searched.add(ukey); }
-        }
-        if (!searched.has(dkey)) {
-            if (maze.portals[dkey]) {
-                nodes.push({steps: n.steps+1, point: maze.portals[dkey].dest});
-                searched.add(dkey); searched.add(setify(maze.portals[dkey].dest));
-            } else { nodes.push({steps: n.steps+1, point: d}); searched.add(dkey); }
-        }
-        if (!searched.has(lkey)) {
-            if (maze.portals[lkey]) {
-                nodes.push({steps: n.steps+1, point: maze.portals[lkey].dest});
-                searched.add(lkey); searched.add(setify(maze.portals[lkey].dest));
-            } else { nodes.push({steps: n.steps+1, point: l}); searched.add(lkey); }
-        }
-        if (!searched.has(rkey)) {
-            if (maze.portals[rkey]) {
-                nodes.push({steps: n.steps+1, point: maze.portals[rkey].dest});
-                searched.add(rkey); searched.add(setify(maze.portals[rkey].dest));
-            } else { nodes.push({steps: n.steps+1, point: r}); searched.add(rkey); }
-        }
+        dirs.forEach(dir => {
+            let portal = maze.portals[keyify(dir)], key = keyify(dir, n.level);
+            if (ids[key]!==undefined && ids[key]<=newsteps) return;
+
+            if (portal && (n.level+portal.levelmod>=0 || ignoreLevels)) {
+                let newlevel = n.level + portal.levelmod;
+                nodes.push({steps: newsteps, point: portal.dest, level: newlevel});
+                ids[keyify(portal.dest, newlevel)] = newsteps;
+            } else {
+                nodes.push({steps: newsteps, point: dir, level: n.level});
+            }
+
+            ids[key] = newsteps; 
+        });
     }
 }
 
-function port(): Maze {
+function thinkWithPortals(): Maze {
     let helper: { [portal: string]: {entry: Point, exit: Point} } = {}, maze: Maze = {portals: {}, start: null, end: null};
+    let wallstart: Point, wallend: Point;
 
     grid.forEach((line,y) => line.forEach((ch1,x) => {
-        let nearby = nearbyPortal(x,y), entry: Point, exit: Point;
+        let nearby = nearbyPortal({x: x, y: y}), entry: Point, exit: Point;
+        if (isWall(ch1)) { if (!wallstart) wallstart = {x: x, y: y}; wallend = {x: x, y: y}; return; }
         if (!isPortal(ch1) || nearby===null) return;
 
-        if (isDot(getChar(x-1,y))) { entry = {x: x, y: y}; exit = {x: x-1, y: y}; }
-        else if (isDot(getChar(x,y-1))) { entry = {x: x, y: y}; exit = {x: x, y: y-1}; }
-        else if (isDot(getChar(nearby.x+1,nearby.y))) { entry = nearby; exit = {x: nearby.x+1, y: nearby.y}; }
+        if (isDot(getChar({x: x-1, y: y}))) { entry = {x: x, y: y}; exit = {x: x-1, y: y}; }
+        else if (isDot(getChar({x: x, y: y-1}))) { entry = {x: x, y: y}; exit = {x: x, y: y-1}; }
+        else if (isDot(getChar({x: nearby.x+1, y: nearby.y}))) { entry = nearby; exit = {x: nearby.x+1, y: nearby.y}; }
         else { entry = nearby; exit = {x: nearby.x, y: nearby.y+1}; }
 
-        let key = ch1+getChar(nearby.x,nearby.y); 
+        let key = ch1+getChar(nearby); 
         if (helper[key]) {
-            maze.portals[setify(entry)] = {dest: helper[key].exit, noreturn: helper[key].entry};
-            maze.portals[setify(helper[key].entry)] = {dest: exit, noreturn: entry};
+            maze.portals[keyify(entry)] = {name: key, dest: helper[key].exit, loc: entry, levelmod: null};
+            maze.portals[keyify(helper[key].entry)] = {name: key, dest: exit, loc: helper[key].entry, levelmod: null};
         } else helper[key] = {entry: entry, exit: exit};
     }));
+
+    for (let portal in maze.portals) {
+        let loc = maze.portals[portal].loc;
+        maze.portals[portal].levelmod = (loc.x<wallstart.x || loc.x>wallend.x || loc.y<wallstart.y || loc.y>wallend.y) ? -1 : 1;
+    }
 
     maze.start = helper["AA"].exit; maze.end = helper["ZZ"].exit;
     grid[helper["AA"].entry.y][helper["AA"].entry.x] = "#";
