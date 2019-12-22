@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as program from './intcode';
 
 type Point = { x: number, y: number };
-let newline = "\n".charCodeAt(0);
 
 fs.readFile("src/17/input.txt", { encoding: 'utf8' }, (err, text) => {
     if (err) { console.log(err); return; }
